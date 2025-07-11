@@ -9,6 +9,7 @@ import subprocess
 import requests
 from unzip_dicoms import unzip_and_rename, parse_subjects
 from typing import Optional
+import datetime
 
 
 class DicomToBidsConverter:
@@ -100,6 +101,13 @@ class DicomToBidsConverter:
         self.output_dir = Path(output_dir).resolve()
         self.temp_dir = self.output_dir / "tmp"
         self.include_misc = include_misc
+        
+        # Create a unique, timestamped log file in a 'logs' directory
+        log_dir = Path("./logs")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.error_log_file = log_dir / f"conversion_{timestamp}.log"
+
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         raw_dicom_dir = None
@@ -141,22 +149,39 @@ class DicomToBidsConverter:
         print("--- Conversion complete ---")
 
     def _convert_subject(self, sub_dir_name: str):
-        """Runs dcm2niix on a single subject's DICOM data."""
+        """
+        Runs dcm2niix on a single subject's DICOM data.
+        """
         subject_id = sub_dir_name.split('-')[1]
-        subject_input_dir = self.input_dir / sub_dir_name / "study" # Point to the 'study' subdirectory
+        subject_input_dir = self.input_dir / sub_dir_name / "study"
         subject_temp_dir = self.temp_dir / f"sub-{subject_id}"
         subject_temp_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"Running dcm2niix for {sub_dir_name}...")
         cmd = [
             str(self.dcm2niix_path),
-            "-f", "%p_%s",  # ProtocolName_SeriesNumber
+            "-f", "%p_%s",
             "-p", "y",
             "-z", "y",
             "-o", str(subject_temp_dir),
             str(subject_input_dir)
         ]
-        subprocess.run(cmd, check=True)
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            error_message = f"""
+--------------------------------------------------
+Timestamp: {datetime.datetime.now().isoformat()}
+Subject: {sub_dir_name}
+Command: {' '.join(e.cmd)}
+Exit Code: {e.returncode}
+Stderr:
+{e.stderr}
+--------------------------------------------------
+"""
+            with open(self.error_log_file, "a") as f:
+                f.write(error_message)
+            print(f"!!! WARNING: dcm2niix failed for subject {sub_dir_name}. See {self.error_log_file} for details. Continuing...")
 
     def _organize_subject_bids(self, subject_id: str):
         """Organizes the converted files into BIDS format using the mapping file."""

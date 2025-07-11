@@ -43,6 +43,12 @@ python dicom_to_bids.py run --zip-dir <dir> --output-dir <dir> [--subjects <list
 python dicom_to_bids.py run --zip-dir 3DfMRI/dicom_zips --output-dir 3DfMRI/bids_dataset --subjects 01-05,08 --include-misc
 ```
 
+### Error Handling and Logging
+
+If `dcm2niix` fails to convert a subject's data (e.g., due to a corrupted DICOM file), the pipeline will **not** stop. It will log detailed information about the failure to a timestamped log file inside a `logs` directory (e.g., `./logs/conversion_2023-10-27_10-30-00.log`).
+
+The script will print a warning to the console and continue processing the remaining subjects. After the run is complete, you can inspect the relevant log file to see which subjects failed and why, allowing you to investigate the problematic data without interrupting the entire workflow.
+
 ### Alternative: Two-Step Manual Conversion
 
 This method gives you more control. For example, you might want to inspect the unzipped DICOM files before converting them.
