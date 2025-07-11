@@ -1,0 +1,9 @@
+{
+  "anat": {
+    "^MPRAGE_.*": "T1w"
+  },
+  "func": {
+    "^SMS_EPI_iso2p2_TR2_RUN(\\d+)_Repeat_.*": "task-main_run-{run}_acq-repeat_bold",
+    "^SMS_EPI_iso2p2_TR2_RUN(\\d+)_.*": "task-main_run-{run}_bold"
+  }
+} 
