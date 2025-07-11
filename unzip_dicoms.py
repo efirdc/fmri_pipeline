@@ -33,6 +33,7 @@ def unzip_and_rename(
     input_dir: str,
     output_dir: str,
     subjects: Union[str, int, List[Union[str, int]], Tuple[Union[str, int], ...]] = "all",
+    zero_padding: int = 2,
 ):
     """
     Unzips archives and renames the extracted folders.
@@ -40,9 +41,9 @@ def unzip_and_rename(
     Args:
         input_dir (str): Directory containing the zipped DICOM files.
         output_dir (str): Directory to extract the files to.
-        subjects (Union[str, int, List[Union[str, int]], Tuple[Union[str, int], ...]], optional):
-            A single subject ID, a list of subject IDs, or 'all' to process all subjects.
-            Defaults to "all".
+        subjects (str or list, optional): A single subject ID, a list of subject IDs,
+                                          or 'all' to process all subjects. Defaults to "all".
+        zero_padding (int, optional): The number of leading zeros for the subject ID. Defaults to 2.
     """
     os.makedirs(output_dir, exist_ok=True)
 
@@ -76,8 +77,14 @@ def unzip_and_rename(
 
             # --- Renaming logic ---
             base_name = os.path.splitext(filename)[0]
+            try:
+                subject_id = base_name.split('_')[1]
+            except IndexError:
+                print(f"Warning: Could not extract subject ID from {filename}. Skipping.")
+                continue
+
             original_folder_path = os.path.join(output_dir, base_name)
-            new_folder_name = f"sub-0{subject_id}"
+            new_folder_name = f"sub-{subject_id.zfill(zero_padding)}"
             new_folder_path = os.path.join(output_dir, new_folder_name)
 
             if os.path.isdir(original_folder_path):

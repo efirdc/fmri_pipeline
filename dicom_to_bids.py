@@ -79,7 +79,8 @@ class DicomToBidsConverter:
         subjects: str = "all",
         input_dir: Optional[str] = None,
         zip_dir: Optional[str] = None,
-        include_misc: bool = False,
+        misc_dir: Optional[str] = None,
+        zero_padding: int = 2,
     ):
         """
         Runs the DICOM to BIDS conversion.
@@ -89,7 +90,8 @@ class DicomToBidsConverter:
             subjects (str, optional): A comma-separated list or range(s) of subject IDs. Defaults to "all".
             input_dir (str, optional): Path to a directory with pre-unzipped subject folders (e.g., sub-001).
             zip_dir (str, optional): Path to a directory with zipped subject archives.
-            include_misc (bool, optional): If True, save non-matching files to a 'misc' folder. Defaults to False.
+            misc_dir (str, optional): A separate directory to store non-BIDS compliant files.
+            zero_padding (int, optional): The number of leading zeros for the subject ID. Defaults to 2.
         """
         if not input_dir and not zip_dir:
             print("Error: You must provide either --input-dir or --zip-dir.")
@@ -100,7 +102,7 @@ class DicomToBidsConverter:
 
         self.output_dir = Path(output_dir).resolve()
         self.temp_dir = self.output_dir / "tmp"
-        self.include_misc = include_misc
+        self.misc_dir = Path(misc_dir) if misc_dir else None
         
         # Create a unique, timestamped log file in a 'logs' directory
         log_dir = Path("./logs")
@@ -115,7 +117,7 @@ class DicomToBidsConverter:
             # Create a temporary directory to hold the unzipped raw DICOMs
             raw_dicom_dir = self.output_dir / "tmp_dicom"
             print(f"Unzipping archives from {zip_dir} to temporary directory {raw_dicom_dir}...")
-            unzip_and_rename(zip_dir, str(raw_dicom_dir), subjects=subjects)
+            unzip_and_rename(zip_dir, str(raw_dicom_dir), subjects=subjects, zero_padding=zero_padding)
             self.input_dir = raw_dicom_dir
         elif input_dir:
             self.input_dir = Path(input_dir).resolve()
@@ -128,7 +130,7 @@ class DicomToBidsConverter:
             subject_list = [d.name for d in self.input_dir.iterdir() if d.is_dir() and d.name.startswith("sub-")]
         else:
             parsed_subjects = parse_subjects(subjects)
-            subject_list = [f"sub-{s.strip().zfill(3)}" for s in parsed_subjects]
+            subject_list = [f"sub-{s.strip().zfill(zero_padding)}" for s in parsed_subjects]
 
         for sub_dir_name in subject_list:
             subject_id = sub_dir_name.split('-')[1]
@@ -220,11 +222,11 @@ Stderr:
             if target_path:
                 print(f"Moving {file.name} to {target_path}")
                 shutil.move(file, target_path)
-            elif self.include_misc:
+            elif self.misc_dir:
                 print(f"WARNING: No BIDS mapping found for {file.name}. Moving to 'misc' folder.")
-                misc_dir = self.output_dir / f"sub-{subject_id}" / "misc"
-                misc_dir.mkdir(parents=True, exist_ok=True)
-                shutil.move(file, misc_dir / file.name)
+                misc_subject_dir = self.misc_dir / f"sub-{subject_id}"
+                misc_subject_dir.mkdir(parents=True, exist_ok=True)
+                shutil.move(file, misc_subject_dir / file.name)
             else:
                 print(f"WARNING: No BIDS mapping found for {file.name}. Skipping file.")
 

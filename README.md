@@ -28,19 +28,20 @@ This is the easiest method. The script will handle unzipping, converting, and cl
 
 **Usage:**
 ```bash
-python dicom_to_bids.py run --zip-dir <dir> --output-dir <dir> [--subjects <list>] [--include-misc]
+python dicom_to_bids.py run --zip-dir <dir> --output-dir <dir> [--subjects <list>] [--zero-padding <int>] [--misc-dir <dir>]
 ```
 *   `--zip-dir`: Path to the directory containing the zipped DICOM archives.
 *   `--output-dir`: The root directory for the final BIDS dataset.
 *   `--subjects`: (Optional) A string to specify subjects. Defaults to `"all"`.
-    *   Comma-separated list: `01,02,05`
-    *   Range: `01-05`
-    *   Combination: `01,03-05,10`
-*   `--include-misc`: (Optional) If this flag is present, any converted files that do not match a rule in `bids_mapping.json` will be saved to a `misc` folder inside each subject's output directory. By default, these files are discarded.
+    *   Comma-separated list: `1,2,5`
+    *   Range: `1-5`
+    *   Combination: `1,3-5,10`
+*   `--zero-padding`: (Optional) The number of digits for the subject ID (e.g., `3` for `sub-001`). Defaults to `2`.
+*   `--misc-dir`: (Optional) If provided, any converted files that do not match a rule in `bids_mapping.json` will be saved to this separate directory, organized by subject (e.g., `<misc-dir>/sub-001/`). By default, these files are discarded.
 
 **Example:**
 ```bash
-python dicom_to_bids.py run --zip-dir 3DfMRI/dicom_zips --output-dir 3DfMRI/bids_dataset --subjects 01-05,08 --include-misc
+python dicom_to_bids.py run --zip-dir 3DfMRI/dicom_zips --output-dir 3DfMRI/bids_dataset --subjects 1-5,8 --zero-padding 3 --misc-dir 3DfMRI/misc_nifti
 ```
 
 ### Error Handling and Logging
@@ -55,12 +56,12 @@ This method gives you more control. For example, you might want to inspect the u
 
 **Step 1: Unzip DICOM Archives**
 ```bash
-python unzip_dicoms.py --input-dir 3DfMRI/dicom_zips --output-dir 3DfMRI/raw_dicom
+python unzip_dicoms.py --input-dir 3DfMRI/dicom_zips --output-dir 3DfMRI/raw_dicom --zero-padding 3
 ```
 
 **Step 2: Convert to BIDS**
 ```bash
-python dicom_to_bids.py run --input-dir 3DfMRI/raw_dicom --output-dir 3DfMRI/bids_dataset --include-misc
+python dicom_to_bids.py run --input-dir 3DfMRI/raw_dicom --output-dir 3DfMRI/bids_dataset --zero-padding 3 --misc-dir 3DfMRI/misc_nifti
 ```
 
 ---
@@ -125,3 +126,5 @@ The file has two main sections, `anat` and `func`, corresponding to the BIDS mod
 *   **Final BIDS Filenames:**
     1.  `sub-001_task-main_run-2_acq-repeat_bold.nii.gz`
     2.  `sub-001_task-main_run-2_bold.nii.gz` 
+
+If a converted file does not match any pattern, it will be placed in the directory specified by `--misc-dir` **only if that option is provided**. Otherwise, it is discarded. This is useful for identifying scans that need a new mapping rule. 
