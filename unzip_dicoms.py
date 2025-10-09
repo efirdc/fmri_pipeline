@@ -55,6 +55,7 @@ def unzip_and_rename(
         else:
             subjects_str = str(subjects)
         subjects_to_process = parse_subjects(subjects_str)
+        subjects_to_process = [int(subject_id) for subject_id in subjects_to_process]
 
     for filename in sorted(os.listdir(input_dir)):
         if filename.endswith(".zip"):
@@ -63,9 +64,9 @@ def unzip_and_rename(
             except IndexError:
                 print(f"Warning: Could not extract subject ID from {filename}. Skipping.")
                 continue
-
+            
             # Filter subjects if a list is provided
-            if subjects_to_process and subject_id not in subjects_to_process:
+            if subjects_to_process and int(subject_id) not in subjects_to_process:
                 continue
 
             zip_path = os.path.join(input_dir, filename)

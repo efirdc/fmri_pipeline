@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=15:00:00
+#SBATCH --time=72:00:00
 #SBATCH --account=def-pstjacqu
 #SBATCH  -n 1
 #SBATCH --cpus-per-task=8
@@ -10,24 +10,24 @@
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-type=REQUEUE
 #SBATCH --mail-type=ALL
-#SBATCH --array=1-15
+#SBATCH --array=1-31
 
 sub_num=$(printf "%03d" $SLURM_ARRAY_TASK_ID)
 
 cd
 module load apptainer
 
-project=/project/6040211/3DfMRI/
+project=/project/6040211/3DfMRI
 
 # Create directories for fMRIprep to access at runtime
 mkdir $SLURM_TMPDIR/work_dir
-mkdir $SLURM_TMPDIR/sub_${sub_num}_vol_out
+mkdir $SLURM_TMPDIR/sub-${sub_num}
 mkdir $SLURM_TMPDIR/image
 mkdir $SLURM_TMPDIR/license
 mkdir -p $SLURM_TMPDIR/3DfMRI
 
 # Copy the raw participant data
-cp -r ${project}/raw_dicom/sub-${sub_num} $SLURM_TMPDIR/3DfMRI
+cp -r ${project}/bids_dataset/sub-${sub_num} $SLURM_TMPDIR/3DfMRI
 cp ${project}/bids_dataset/dataset_description.json $SLURM_TMPDIR/3DfMRI # not sure if this is needed
 
 # Required fMRIprep files
@@ -46,7 +46,7 @@ $SLURM_TMPDIR/image/fmriprep_24.0.0.sif \
 --participant-label ${sub_num} \
 --work-dir /work_dir \
 --fs-license-file /license/license.txt \
---output-spaces T1w \
+--output-spaces T1w MNI152NLin6Asym MNI152NLin2009cAsym fsaverage \
 --stop-on-first-crash
 
 
