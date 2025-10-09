@@ -4,19 +4,74 @@ This repository contains a set of Python scripts to convert raw fMRI DICOM data 
 
 The main script, `dicom_to_bids.py`, can run the entire conversion process in a single step, from zipped DICOM archives to a BIDS-compliant dataset.
 
-## Installation
+## Setup
 
-The required Python packages are listed in `requirements.txt`. It is highly recommended to use a virtual environment.
+This guide provides instructions for setting up the pipeline on a local machine or a Digital Research Alliance of Canada (DRAC) cluster.
 
-```bash
-# Create and activate a virtual environment (optional but recommended)
-python -m venv .venv
-# On Windows: .\\.venv\\Scripts\\activate
-# On Linux/macOS: source .venv/bin/activate
+### Prerequisites
 
-# Install packages
-pip install -r requirements.txt
-```
+Before you begin, ensure you have Python 3.8 or higher available.
+
+**For Local Machines:**
+If you don't have Python, you can download it from the [official Python website](https://www.python.org/downloads/).
+
+**For DRAC Clusters:**
+Python 3.11 is loaded by default on DRAC clusters.
+
+### Installation Steps
+
+1.  **Clone the Repository**
+
+    On a DRAC cluster, it's good practice to store projects in a designated directory. We recommend cloning into a path like `$HOME/projects/def-{group_name}/{your_user_name}/`.
+
+    First, create this directory structure if it doesn't exist, then clone the repository:
+    ```bash
+    # Replace with your actual group and user names
+    mkdir -p $$HOME/projects/def-{group_name}/{your_user_name}/
+    cd $$HOME/projects/def-{group_name}/{your_user_name}/
+
+    # Clone the repository
+    git clone https://github.com/efirdc/fmri_pipeline.git
+    cd fmri_pipeline
+    ```
+
+2.  **Create and Activate a Virtual Environment**
+
+    A virtual environment isolates project-specific dependencies. We will create it inside the cloned `fmri_pipeline` directory.
+
+    **On Windows:**
+    ```bash
+    # Create the virtual environment
+    python -m venv .venv
+
+    # Activate the virtual environment
+    .\\.venv\\Scripts\\activate
+    ```
+
+    **On macOS and Linux (including DRAC):**
+    ```bash
+    # Create the virtual environment
+    python3 -m venv .venv
+
+    # Activate the virtual environment
+    source .venv/bin/activate
+    ```
+    You will know the environment is active when you see `(.venv)` at the beginning of your command prompt.
+
+3.  **Install Required Packages**
+
+    With the virtual environment activated, install the necessary Python packages using pip:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Verify the Installation**
+
+    Check that the main script is executable and the dependencies are installed correctly by running:
+    ```bash
+    python dicom_to_bids.py --help
+    ```
+    This command should display the script's help menu, confirming that the setup is complete.
 
 ## Conversion Process
 
