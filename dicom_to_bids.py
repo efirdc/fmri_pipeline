@@ -113,42 +113,47 @@ class DicomToBidsConverter:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         raw_dicom_dir = None
-        if zip_dir:
-            # Create a temporary directory to hold the unzipped raw DICOMs
-            raw_dicom_dir = self.output_dir / "tmp_dicom"
-            print(f"Unzipping archives from {zip_dir} to temporary directory {raw_dicom_dir}...")
-            unzip_and_rename(zip_dir, str(raw_dicom_dir), subjects=subjects, zero_padding=zero_padding)
-            self.input_dir = raw_dicom_dir
-        elif input_dir:
-            self.input_dir = Path(input_dir).resolve()
-        else:
-            # This case is handled by the initial check, but keeps linters happy
-            return
+        try:
+            if zip_dir:
+                # Create a temporary directory to hold the unzipped raw DICOMs
+                raw_dicom_dir = self.output_dir / "tmp_dicom"
+                print(f"Unzipping archives from {zip_dir} to temporary directory {raw_dicom_dir}...")
+                unzip_and_rename(zip_dir, str(raw_dicom_dir), subjects=subjects, zero_padding=zero_padding)
+                self.input_dir = raw_dicom_dir
+            elif input_dir:
+                self.input_dir = Path(input_dir).resolve()
+            else:
+                # This case is handled by the initial check, but keeps linters happy
+                return
 
-        subject_list = []
-        if subjects == "all":
-            subject_list = [d.name for d in self.input_dir.iterdir() if d.is_dir() and d.name.startswith("sub-")]
-        else:
-            parsed_subjects = parse_subjects(subjects)
-            subject_list = [f"sub-{s.strip().zfill(zero_padding)}" for s in parsed_subjects]
+            subject_list = []
+            if subjects == "all":
+                subject_list = [d.name for d in self.input_dir.iterdir() if d.is_dir() and d.name.startswith("sub-")]
+            else:
+                parsed_subjects = parse_subjects(subjects)
+                subject_list = [f"sub-{s.strip().zfill(zero_padding)}" for s in parsed_subjects]
 
-        for sub_dir_name in subject_list:
-            subject_id = sub_dir_name.split('-')[1]
-            print(f"--- Processing subject {subject_id} ---")
-            self._convert_subject(sub_dir_name)
-            self._organize_subject_bids(subject_id)
+            for sub_dir_name in subject_list:
+                subject_id = sub_dir_name.split('-')[1]
+                print(f"--- Processing subject {subject_id} ---")
+                self._convert_subject(sub_dir_name)
+                self._organize_subject_bids(subject_id)
+            
+            print("--- Conversion complete ---")
 
-        # Clean up temp folder
-        if self.temp_dir.exists():
-            print("Cleaning up temporary directory...")
-            shutil.rmtree(self.temp_dir)
+        except KeyboardInterrupt:
+            print("\n--- User interrupted. Cleaning up temporary files. ---")
+            sys.exit(130)  # Standard exit code for Ctrl+C
         
-        # Clean up the unzipped raw dicoms if we created them
-        if raw_dicom_dir and raw_dicom_dir.exists():
-            print(f"Cleaning up temporary raw DICOM directory {raw_dicom_dir}...")
-            shutil.rmtree(raw_dicom_dir)
-
-        print("--- Conversion complete ---")
+        finally:
+            # This block will always run, ensuring cleanup happens
+            if self.temp_dir.exists():
+                print("Cleaning up temporary directory...")
+                shutil.rmtree(self.temp_dir)
+            
+            if raw_dicom_dir and raw_dicom_dir.exists():
+                print(f"Cleaning up temporary raw DICOM directory {raw_dicom_dir}...")
+                shutil.rmtree(raw_dicom_dir)
 
     def _convert_subject(self, sub_dir_name: str):
         """
