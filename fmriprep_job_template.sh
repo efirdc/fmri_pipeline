@@ -1,53 +1,65 @@
 #!/bin/bash
-#SBATCH --time=15:00:00
+#SBATCH --time=12:00:00
 #SBATCH --account=def-YOUR_ACCOUNT_HERE
-#SBATCH  -n 1
+#SBATCH -n 1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=16G
+#SBATCH --mem-per-cpu=8G
 #SBATCH --mail-user=YOUR_EMAIL_HERE@ualberta.ca
-#SBATCH --mail-type=BEGIN
-#SBATCH --mail-type=END
-#SBATCH --mail-type=FAIL
-#SBATCH --mail-type=REQUEUE
-#SBATCH --mail-type=ALL
+#SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --array=SUBJECT_IDS_HERE
 
-sub_num=$(printf "%03d" $SLURM_ARRAY_TASK_ID)
+set -euo pipefail
 
-cd
+raw_sub_id="${SLURM_ARRAY_TASK_ID}"
+sub_id="$(printf "%03d" "${raw_sub_id}")"
+
 module load apptainer
 
-project=/path/to/your/project
+project="/path/to/your/project"
+bids_root="${project}/bids_dataset"
+output_root="${project}/fmriprep"
+fmriprep_sif="${project}/fmriprep_24.1.1.sif"
+license_file="${project}/license.txt"
+subject_dir="${bids_root}/sub-${sub_id}"
 
-# Create directories for fMRIprep to access at runtime
-mkdir $SLURM_TMPDIR/work_dir
-mkdir $SLURM_TMPDIR/sub-${sub_num}
-mkdir $SLURM_TMPDIR/image
-mkdir $SLURM_TMPDIR/license
-mkdir -p $SLURM_TMPDIR/3DfMRI
+if [[ ! -d "${subject_dir}" ]]; then
+  echo "Missing BIDS subject directory: ${subject_dir}" >&2
+  exit 1
+fi
 
-# Copy the raw participant data
-cp -r ${project}/bids_dataset/sub-${sub_num} $SLURM_TMPDIR/3DfMRI
-cp ${project}/bids_dataset/dataset_description.json $SLURM_TMPDIR/3DfMRI # not sure if fMRIprep needs this
+if [[ ! -f "${bids_root}/dataset_description.json" ]]; then
+  echo "Missing BIDS root file: ${bids_root}/dataset_description.json" >&2
+  exit 1
+fi
 
-# Required fMRIprep files
-cp ${project}/fmriprep_24.0.0.sif $SLURM_TMPDIR/image
-cp ${project}/license.txt $SLURM_TMPDIR/license
+if [[ ! -f "${fmriprep_sif}" ]]; then
+  echo "Missing fMRIPrep image: ${fmriprep_sif}" >&2
+  exit 1
+fi
 
+if [[ ! -f "${license_file}" ]]; then
+  echo "Missing FreeSurfer license: ${license_file}" >&2
+  exit 1
+fi
 
-apptainer run  --cleanenv \
--B $SLURM_TMPDIR/3DfMRI:/raw \
--B $SLURM_TMPDIR/sub-${sub_num}:/output \
--B $SLURM_TMPDIR/work_dir:/work_dir \
--B $SLURM_TMPDIR/image:/image \
--B $SLURM_TMPDIR/license:/license \
-$SLURM_TMPDIR/image/fmriprep_24.0.0.sif \
-/raw /output participant \
---participant-label ${sub_num} \
---work-dir /work_dir \
---fs-license-file /license/license.txt \
---output-spaces T1w \
---stop-on-first-crash
+mkdir -p "${SLURM_TMPDIR}/bids_input" "${SLURM_TMPDIR}/output" "${SLURM_TMPDIR}/work_dir" "${output_root}"
 
+cp -r "${subject_dir}" "${SLURM_TMPDIR}/bids_input/"
+cp "${bids_root}/dataset_description.json" "${SLURM_TMPDIR}/bids_input/"
+cp "${license_file}" "${SLURM_TMPDIR}/bids_input/license.txt"
 
-cp -r $SLURM_TMPDIR/sub-${sub_num} ${project}/fmriprep/
+apptainer run --cleanenv \
+  -B "${SLURM_TMPDIR}/bids_input:/data" \
+  -B "${SLURM_TMPDIR}/output:/output" \
+  -B "${SLURM_TMPDIR}/work_dir:/work" \
+  "${fmriprep_sif}" \
+  /data /output participant \
+  --participant-label "${sub_id}" \
+  --work-dir /work \
+  --fs-license-file /data/license.txt \
+  --output-spaces T1w MNI152NLin2009cAsym \
+  --nthreads "${SLURM_CPUS_PER_TASK}" \
+  --omp-nthreads "${SLURM_CPUS_PER_TASK}" \
+  --stop-on-first-crash
+
+cp -r "${SLURM_TMPDIR}/output/." "${output_root}/"
