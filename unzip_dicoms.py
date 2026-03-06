@@ -10,6 +10,7 @@ def parse_subjects(subjects_str: str) -> List[str]:
     e.g., "01,03-05" -> ["01", "03", "04", "05"]
     """
     subjects = []
+    subjects_str = str(subjects_str)
     parts = subjects_str.split(',')
     for part in parts:
         part = part.strip()
