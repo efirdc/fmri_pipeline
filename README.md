@@ -8,6 +8,7 @@ The main entry point is `dicom_to_bids.py`, which can run the full ZIP -> DICOM 
 
 - `dicom_to_bids.py`: main converter
 - `unzip_dicoms.py`: optional standalone unzip step
+- `add_fieldmap_metadata.py`: link one fieldmap set per subject to functional runs
 - `bids_mapping.json`: generic example mapping file
 - `fmriprep_job_template.sh`: generic SLURM template for downstream `fMRIPrep`
 
@@ -127,6 +128,34 @@ The mapping file is a JSON object keyed by BIDS modality, for example:
 
 Rules are matched in order, so put the most specific regexes before broader fallback rules.
 
+## Fieldmap Linkage
+
+Putting files in `sub-*/fmap/` is not enough for fMRIPrep to use them. The
+fieldmap JSON sidecars must be associated with the functional runs.
+
+For a dataset with one fieldmap set per subject that applies to all functional
+runs:
+
+```bash
+python add_fieldmap_metadata.py \
+  --bids-dir /path/to/bids_dataset \
+  --field-id auto_fieldmap
+```
+
+The script writes:
+
+- `B0FieldIdentifier` to each selected fieldmap JSON.
+- the matching `B0FieldSource` to each functional BOLD JSON.
+
+Use `--dry-run` to inspect subject and file counts without modifying anything.
+If the BIDS directory contains an alternate fieldmap acquisition that should
+not be linked, use `--exclude-fieldmap-name <text>`.
+
+This helper intentionally supports only the simple one-fieldmap-set-per-subject
+case. If different fieldmap sets apply to different runs, assign distinct B0
+identifiers and map each functional run to the appropriate source with
+study-specific logic.
+
 ## `fMRIPrep` Template
 
 `fmriprep_job_template.sh` is a generic DRAC/SLURM template that:
@@ -138,6 +167,11 @@ Rules are matched in order, so put the most specific regexes before broader fall
 - copies outputs back to a shared project directory
 
 Copy it into your project and customize the account, email, paths, subject formatting, and `fMRIPrep` options there.
+
+The template stages the complete subject directory, including `fmap/`. Do not
+pass `--ignore fieldmaps`. After preprocessing, inspect the fMRIPrep HTML
+report or logs to confirm that susceptibility distortion correction was
+applied; the presence of fieldmap files alone does not prove they were used.
 
 ## Recommended Project Split
 
