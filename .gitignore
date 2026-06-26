@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 logs/
 dcm2niix/
+PRIVATE_NOTES.md
