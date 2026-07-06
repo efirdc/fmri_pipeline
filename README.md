@@ -544,6 +544,7 @@ Poor registration, missing runs, failed fieldmap use, or systematic warnings sho
 - `fmriprep_job_template.sh`: generic DRAC/SLURM fMRIPrep template.
 - `fsl_feat_pipeline.py`: BIDS-driven FSL FEAT discovery, FSF generation, QC, and native ROI-mask helpers.
 - `fsl_feat_job_template.sh`: generic DRAC/SLURM FEAT array template.
+- `fsl_feat_postprocess_job_template.sh`: generic SLURM template for FEAT status summaries, APNG QC, and native ROI masks.
 - `requirements.txt`: Python packages needed for conversion.
 
 ## FSL FEAT Pipeline
@@ -657,6 +658,10 @@ This creates animated PNGs in:
 - `qc/fsl_feat_apng/by_run/`: subject/run subfolders.
 
 The APNGs complement FEAT's standard `report_reg.html` and registration PNGs.
+
+For a full SLURM run, use `fsl_feat_postprocess_job_template.sh` with an
+`afterok` dependency on the FEAT array so QC only starts after successful FEAT
+completion.
 
 ### 7. Build native-space ROI masks
 
