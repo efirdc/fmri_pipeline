@@ -1,0 +1,7 @@
+{
+  "rois": {
+    "gray_matter": "/path/to/mni_gray_matter_mask.nii.gz",
+    "neurosynth_language": "/path/to/neurosynth_language_mask.nii.gz",
+    "neurosynth_social": "/path/to/neurosynth_social_mask.nii.gz"
+  }
+}

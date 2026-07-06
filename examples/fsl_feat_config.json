@@ -1,0 +1,19 @@
+{
+  "discard_initial_volumes": 5,
+  "highpass_seconds": 100,
+  "smooth_fwhm_mm": 5,
+  "bet_func": true,
+  "slice_timing": 0,
+  "motion_correction": true,
+  "func_to_t1_registration": true,
+  "func_to_t1_search": 90,
+  "func_to_t1_dof": "BBR",
+  "standard_registration": true,
+  "standard_search": 90,
+  "standard_dof": 12,
+  "standard_nonlinear": false,
+  "standard_image": "${FSLDIR}/data/standard/MNI152_T1_2mm_brain",
+  "fieldmap_unwarp": false,
+  "unwarp_dir": "y-",
+  "overwrite": false
+}

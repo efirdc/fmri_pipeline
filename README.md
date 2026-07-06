@@ -542,4 +542,149 @@ Poor registration, missing runs, failed fieldmap use, or systematic warnings sho
 - `add_fieldmap_metadata.py`: links one fieldmap set per subject to functional BOLD runs using BIDS B0 metadata.
 - `bids_mapping.json`: example mapping file.
 - `fmriprep_job_template.sh`: generic DRAC/SLURM fMRIPrep template.
+- `fsl_feat_pipeline.py`: BIDS-driven FSL FEAT discovery, FSF generation, QC, and native ROI-mask helpers.
+- `fsl_feat_job_template.sh`: generic DRAC/SLURM FEAT array template.
 - `requirements.txt`: Python packages needed for conversion.
+
+## FSL FEAT Pipeline
+
+The `fsl-feat` branch adds a reusable FEAT preprocessing path for projects that
+want FSL-style outputs and registration products. It reuses the same BIDS input
+layout produced by `dicom_to_bids.py` and the same fieldmap-metadata helper, but
+the FEAT workflow is separate from fMRIPrep.
+
+The heavy FEAT work must run through SLURM on compute nodes. Do not run FEAT on a
+login node.
+
+### 1. Discover BIDS runs
+
+Create a manifest from a BIDS dataset. The default excludes `task-soundcheck`.
+
+```bash
+python fsl_feat_pipeline.py discover-runs \
+  --bids-root /path/to/bids_dataset \
+  --output-root /path/to/derivatives/fsl_feat_v1 \
+  --output-csv manifests/fsl_feat_runs.csv \
+  --exclude-tasks soundcheck
+```
+
+For a project where the manifest is created locally but executed on a cluster,
+write remote paths directly into the manifest:
+
+```bash
+python fsl_feat_pipeline.py discover-runs \
+  --bids-root /local/bids_dataset \
+  --output-csv manifests/fsl_feat_runs.csv \
+  --remote-bids-root /project/ACCOUNT/STUDY/bids_dataset \
+  --remote-output-root /project/ACCOUNT/STUDY/derivatives/fsl_feat_v1 \
+  --exclude-tasks soundcheck
+```
+
+The manifest records one row per functional run, including the selected T1w,
+TR, volume count, and target `.feat` directory.
+
+### 2. Configure FEAT
+
+Start from `examples/fsl_feat_config.json`. Important fields:
+
+- `discard_initial_volumes`: number of leading volumes FEAT should delete.
+- `highpass_seconds`: FEAT high-pass cutoff in seconds.
+- `smooth_fwhm_mm`: spatial smoothing FWHM in millimeters.
+- `bet_func`: whether FEAT should run functional BET.
+- `func_to_t1_dof`: use `BBR` for boundary-based functional-to-T1 registration.
+- `standard_dof`: affine degrees of freedom for T1-to-MNI registration.
+- `standard_nonlinear`: enable FNIRT nonlinear registration only after QC shows it is needed.
+- `fieldmap_unwarp`: enable FEAT fieldmap unwarping only after BIDS-to-FSL fieldmap mapping is confirmed.
+
+The default first pass is MCFLIRT, functional BET, smoothing, high-pass filtering,
+BBR functional-to-T1 registration, and 12DOF linear T1-to-MNI registration.
+
+### 3. Generate and inspect one FSF
+
+```bash
+python fsl_feat_pipeline.py write-fsf \
+  --manifest-csv manifests/fsl_feat_runs.csv \
+  --config-json examples/fsl_feat_config.json \
+  --fsf-dir manifests/fsf \
+  --row-id 1
+```
+
+Open the generated `.fsf` and confirm paths, TR, volume count, highres/T1w path,
+output directory, and registration settings before submitting jobs.
+
+### 4. Run FEAT on SLURM
+
+Copy or edit `fsl_feat_job_template.sh`, set the account/module names, and submit
+one array task per manifest row:
+
+```bash
+export MANIFEST_CSV=/project/ACCOUNT/STUDY/manifests/fsl_feat_runs.csv
+export CONFIG_JSON=/project/ACCOUNT/STUDY/config/fsl_feat_config.json
+export PIPELINE_DIR=/project/ACCOUNT/code/fmri_pipeline
+export FSL_MODULE=fsl/6.0.7
+
+sbatch --array=1-144 fsl_feat_job_template.sh
+```
+
+The template refuses to run without `SLURM_TMPDIR`, so accidental login-node FEAT
+runs fail fast.
+
+### 5. Summarize outputs
+
+```bash
+python fsl_feat_pipeline.py summarize \
+  --manifest-csv manifests/fsl_feat_runs.csv \
+  --output-csv qc/fsl_feat_status.csv
+```
+
+The status table reports whether each `.feat` exists and whether core
+registration products are present, including `example_func2highres.mat`,
+`highres2standard.mat`, `standard2highres.mat`, and `example_func2standard.mat`.
+
+### 6. Generate APNG registration QC
+
+After FEAT outputs exist:
+
+```bash
+python fsl_feat_pipeline.py make-qc \
+  --manifest-csv manifests/fsl_feat_runs.csv \
+  --output-root qc/fsl_feat_apng
+```
+
+This creates animated PNGs in:
+
+- `qc/fsl_feat_apng/flat_review/`: all runs in one sortable review folder.
+- `qc/fsl_feat_apng/by_run/`: subject/run subfolders.
+
+The APNGs complement FEAT's standard `report_reg.html` and registration PNGs.
+
+### 7. Build native-space ROI masks
+
+Do not use header-only resampling for scientific ROI masks. Use FEAT transforms
+to map MNI masks into each native EPI run:
+
+```bash
+python fsl_feat_pipeline.py build-roi-masks \
+  --manifest-csv manifests/fsl_feat_runs.csv \
+  --roi-config-json examples/fsl_feat_roi_masks.example.json \
+  --output-root derivatives/fsl_feat_roi_masks
+```
+
+Masks are transformed with nearest-neighbor interpolation using FEAT's inverse
+standard-to-native transform chain.
+
+### DATT example
+
+For DATT, the intended first-pass command shape is:
+
+```bash
+python fsl_feat_pipeline.py discover-runs \
+  --bids-root DATT/Data/bids_dataset \
+  --output-csv DATT/Cory/analysis/preprocessing_qc/fsl_feat_v1/fsl_feat_runs.csv \
+  --remote-bids-root /project/6029407/DATT/bids_dataset \
+  --remote-output-root /project/6029407/DATT/derivatives/fsl_feat_v1 \
+  --exclude-tasks soundcheck
+```
+
+The expected DATT full-run array is all subjects `sub-2003` through `sub-2026`
+and analysis tasks `audio`, `video`, and `reading` runs 1-4, for 144 tasks.
