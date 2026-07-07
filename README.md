@@ -600,6 +600,18 @@ Start from `examples/fsl_feat_config.json`. Important fields:
 The default first pass is MCFLIRT, functional BET, smoothing, high-pass filtering,
 BBR functional-to-T1 registration, and 12DOF linear T1-to-MNI registration.
 
+For BBR, do not pass a raw T1w image as the FEAT highres brain image. Prepare a
+brain-extracted T1 manifest first:
+
+```bash
+python fsl_feat_pipeline.py prepare-t1-brains \
+  --manifest-csv manifests/fsl_feat_runs.csv \
+  --output-root derivatives/fsl_feat_assets/t1_brain \
+  --output-manifest-csv manifests/fsl_feat_runs_t1brain.csv
+```
+
+Use the `_t1brain.csv` manifest for `write-fsf` and SLURM execution.
+
 ### 3. Generate and inspect one FSF
 
 ```bash

@@ -356,6 +356,80 @@ def write_fsf(
         print(fsf_path)
 
 
+def prepare_t1_brains(
+    manifest_csv: str,
+    output_root: str,
+    *,
+    output_manifest_csv: str = "",
+    bet_frac: float = 0.5,
+    bet_gradient: float = 0.0,
+    force: bool = False,
+) -> None:
+    """Run BET once per unique T1w and write a manifest that points to brain images.
+
+    FEAT's BBR path treats `highres_files(1)` as the highres brain image. Passing
+    a raw T1w here can make `epi_reg --t1brain=highres` use a non-skull-stripped
+    image, which is not valid. This helper creates BET-derived T1 brain images
+    and rewrites `t1w_path` in a copy of the manifest.
+    """
+
+    _require_program("bet")
+    rows = _read_csv(Path(manifest_csv))
+    out_root = Path(output_root)
+    out_root.mkdir(parents=True, exist_ok=True)
+
+    brain_by_t1: dict[str, str] = {}
+    for row in rows:
+        t1w_path = str(row["t1w_path"])
+        if t1w_path in brain_by_t1:
+            continue
+        subject = row["subject"]
+        out_path = out_root / f"{subject}_desc-bet_T1w_brain.nii.gz"
+        if force or not out_path.exists():
+            prefix = str(out_path)
+            if prefix.endswith(".nii.gz"):
+                prefix = prefix[:-7]
+            _run(
+                [
+                    "bet",
+                    t1w_path,
+                    prefix,
+                    "-R",
+                    "-f",
+                    str(bet_frac),
+                    "-g",
+                    str(bet_gradient),
+                ]
+            )
+        brain_by_t1[t1w_path] = str(out_path)
+
+    updated_rows: list[dict[str, Any]] = []
+    for row in rows:
+        updated = dict(row)
+        updated["raw_t1w_path"] = row["t1w_path"]
+        updated["t1w_path"] = brain_by_t1[str(row["t1w_path"])]
+        updated["t1w_brain_method"] = f"bet_R_f{bet_frac:g}_g{bet_gradient:g}"
+        updated_rows.append(updated)
+
+    out_manifest = Path(output_manifest_csv) if output_manifest_csv else Path(manifest_csv).with_name(
+        Path(manifest_csv).stem + "_t1brain.csv"
+    )
+    fieldnames = list(updated_rows[0].keys()) if updated_rows else []
+    _write_csv(out_manifest, updated_rows, fieldnames)
+    _write_json(
+        out_manifest.with_suffix(".summary.json"),
+        {
+            "source_manifest": str(manifest_csv),
+            "output_manifest": str(out_manifest),
+            "output_root": str(out_root),
+            "n_rows": len(updated_rows),
+            "n_unique_t1w": len(brain_by_t1),
+            "bet_frac": bet_frac,
+            "bet_gradient": bet_gradient,
+        },
+    )
+
+
 def run_feat_for_row(manifest_csv: str, config_json: str, row_id: int, work_dir: str) -> None:
     """Generate an FSF for one manifest row and run FEAT."""
 
@@ -745,6 +819,14 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--row-id", type=int)
     p.add_argument("--fsf-template", default="")
 
+    p = sub.add_parser("prepare-t1-brains")
+    p.add_argument("--manifest-csv", required=True)
+    p.add_argument("--output-root", required=True)
+    p.add_argument("--output-manifest-csv", default="")
+    p.add_argument("--bet-frac", type=float, default=0.5)
+    p.add_argument("--bet-gradient", type=float, default=0.0)
+    p.add_argument("--force", action="store_true")
+
     p = sub.add_parser("run-feat-row")
     p.add_argument("--manifest-csv", required=True)
     p.add_argument("--config-json", required=True)
@@ -774,6 +856,8 @@ def main(argv: list[str] | None = None) -> None:
         discover_runs(**kwargs)
     elif command == "write-fsf":
         write_fsf(**kwargs)
+    elif command == "prepare-t1-brains":
+        prepare_t1_brains(**kwargs)
     elif command == "run-feat-row":
         run_feat_for_row(**kwargs)
     elif command == "summarize":
