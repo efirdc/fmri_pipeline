@@ -435,16 +435,13 @@ def _normalize_slice(arr):
     return (out * 255).astype(np.uint8)
 
 
-def _slice_grid(path: Path, title: str, *, size: int = 168):
+def _render_slice_grid(data, title: str, slice_indices_by_axis: list[list[int]], *, size: int = 168):
     import numpy as np
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 
-    data = _load_3d(path)
     axes = [2, 1, 0]
     rows = []
-    for axis in axes:
-        n = data.shape[axis]
-        idxs = [max(0, min(n - 1, round(x))) for x in np.linspace(n * 0.18, n * 0.82, 7)]
+    for axis, idxs in zip(axes, slice_indices_by_axis):
         tiles = []
         for idx in idxs:
             sl = np.take(data, idx, axis=axis)
@@ -471,10 +468,28 @@ def _slice_grid(path: Path, title: str, *, size: int = 168):
     return out
 
 
+def _slice_grid(path: Path, title: str, slice_indices_by_axis: list[list[int]] | None = None, *, size: int = 168):
+    import numpy as np
+
+    data = _load_3d(path)
+    if slice_indices_by_axis is None:
+        slice_indices_by_axis = _default_slice_indices(data.shape)
+    return _render_slice_grid(data, title, slice_indices_by_axis, size=size)
+
+
+def _default_slice_indices(shape: tuple[int, ...] | list[int]) -> list[list[int]]:
+    import numpy as np
+
+    axes = [2, 1, 0]
+    out: list[list[int]] = []
+    for axis in axes:
+        n = int(shape[axis])
+        out.append([max(0, min(n - 1, round(x))) for x in np.linspace(n * 0.18, n * 0.82, 7)])
+    return out
+
+
 def make_qc(manifest_csv: str, output_root: str, *, row_id: int | None = None, duration_ms: int = 900) -> None:
     """Create APNG flip QC for completed FEAT runs."""
-
-    from PIL import Image
 
     rows = _read_csv(Path(manifest_csv))
     if row_id is not None:
@@ -491,15 +506,27 @@ def make_qc(manifest_csv: str, output_root: str, *, row_id: int | None = None, d
         run_dir = nested / row["subject"] / run_label
         run_dir.mkdir(parents=True, exist_ok=True)
         pairs = [
-            ("func_vs_t1w", feat / "example_func.nii.gz", Path(row["t1w_path"])),
-            ("func_mni", feat / "reg" / "example_func2standard.nii.gz", Path(os.environ.get("FSLDIR", "")) / "data/standard/MNI152_T1_2mm_brain.nii.gz"),
+            # Both frames must be in the same grid. Raw example_func vs raw T1w is
+            # not a valid flip QC because slice axes/spacings usually differ.
+            ("func_vs_t1w", feat / "reg" / "example_func2highres.nii.gz", feat / "reg" / "highres.nii.gz"),
+            ("func_mni", feat / "reg" / "example_func2standard.nii.gz", feat / "reg" / "standard.nii.gz"),
         ]
         for label, first_path, second_path in pairs:
             if not first_path.exists() or not second_path.exists():
                 continue
+            first_data = _load_3d(first_path)
+            second_data = _load_3d(second_path)
+            if first_data.shape != second_data.shape:
+                print(
+                    f"WARNING: skipping {run_label} {label}; shape mismatch "
+                    f"{first_data.shape} vs {second_data.shape}",
+                    file=sys.stderr,
+                )
+                continue
+            slice_indices = _default_slice_indices(first_data.shape)
             frames = [
-                _slice_grid(first_path, f"{run_label}: {label} frame 1"),
-                _slice_grid(second_path, f"{run_label}: {label} frame 2"),
+                _render_slice_grid(first_data, f"{run_label}: {label} functional", slice_indices),
+                _render_slice_grid(second_data, f"{run_label}: {label} reference", slice_indices),
             ]
             out_name = f"{int(row['row_id']):05d}_{run_label}_{label}.png"
             for out_path in (flat / out_name, run_dir / out_name):
