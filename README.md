@@ -329,22 +329,24 @@ With `--zero_padding 3`, subject `1` becomes `sub-001`.
 
 `bids_mapping.json` is a generic example. Most projects need their own mapping file.
 
-The mapping file is a JSON object organized by BIDS modality. Each entry maps a regular expression pattern from the converted scanner filename to a BIDS suffix.
+The mapping file is a JSON object organized by BIDS modality. Each entry maps text from the converted scanner filename to a BIDS suffix.
+
+The left side can be a simple filename prefix. It can also use one small regular-expression feature: parentheses capture a number that can be reused as `{run}` on the right side.
 
 Example:
 
 ```json
 {
   "anat": {
-    "^MPRAGE_(\\d+)\\.": "T1w"
+    "MPRAGE_(\\d+)": "T1w"
   },
   "fmap": {
-    "^FieldMap_(\\d+)_e1\\.": "magnitude1",
-    "^FieldMap_(\\d+)_e2\\.": "magnitude2",
-    "^FieldMap_(\\d+)_e2_ph\\.": "phasediff"
+    "FieldMap_(\\d+)_e1": "magnitude1",
+    "FieldMap_(\\d+)_e2": "magnitude2",
+    "FieldMap_(\\d+)_e2_ph": "phasediff"
   },
   "func": {
-    "^MainTask_run(\\d+)_(\\d+)\\.": "task-main_run-{run}_bold"
+    "SMS_EPI_iso2p2_TR2_RUN(\\d+)": "task-main_run-{run}_bold"
   }
 }
 ```
@@ -353,34 +355,34 @@ Rules are checked in order. Put specific rules before broad fallback rules.
 
 Files that do not match any rule are moved to `--misc_dir` if that argument is provided. A large number of files in `misc_dir` usually means the mapping file needs to be updated.
 
-### How the regular expression rules work
+### How the matching rules work
 
-The left side of each mapping rule is a regular expression matched against the filename produced by `dcm2niix`.
+The left side of each mapping rule is matched against the filename produced by `dcm2niix`.
+
+Most of the rule can be ordinary text copied from the scanner sequence name.
 
 For example:
 
 ```json
-"^MPRAGE_(\\d+)\\.": "T1w"
+"MPRAGE_(\\d+)": "T1w"
 ```
 
 This means:
 
-- `^` means the filename must start here.
 - `MPRAGE_` matches the literal text `MPRAGE_`.
 - `(\\d+)` captures one or more digits, such as a series number.
-- `\\.` matches a literal period in the filename.
 - `"T1w"` is the BIDS suffix to use when the pattern matches.
 
 For functional runs:
 
 ```json
-"^MainTask_run(\\d+)_(\\d+)\\.": "task-main_run-{run}_bold"
+"SMS_EPI_iso2p2_TR2_RUN(\\d+)": "task-main_run-{run}_bold"
 ```
 
-The first captured number is used as `{run}`. A filename like:
+The captured run number is used as `{run}`. A filename like:
 
 ```text
-MainTask_run2_15.nii.gz
+SMS_EPI_iso2p2_TR2_RUN2_12.nii.gz
 ```
 
 would become:
@@ -388,6 +390,8 @@ would become:
 ```text
 sub-001_task-main_run-2_bold.nii.gz
 ```
+
+In JSON files, backslashes have special meaning, so the digit shortcut `\d` has to be written as `\\d`.
 
 The exact scanner text depends on the study. A useful workflow is to convert one subject, check filenames in `misc_dir`, then adjust the mapping rules until expected files land in `anat/`, `func/`, and `fmap/`.
 

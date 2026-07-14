@@ -1,14 +1,13 @@
 {
   "anat": {
-    "^MPRAGE_(\\d+)\\.": "T1w"
+    "MPRAGE_(\\d+)": "T1w"
   },
   "fmap": {
-    "^FieldMap_(\\d+)_e1\\.": "magnitude1",
-    "^FieldMap_(\\d+)_e2\\.": "magnitude2",
-    "^FieldMap_(\\d+)_e2_ph\\.": "phasediff"
+    "FieldMap_(\\d+)_e1": "magnitude1",
+    "FieldMap_(\\d+)_e2": "magnitude2",
+    "FieldMap_(\\d+)_e2_ph": "phasediff"
   },
   "func": {
-    "^MainTask_run(\\d+)_(\\d+)\\.": "task-main_run-{run}_bold",
-    "^Rest_(\\d+)\\.": "task-rest_bold"
+    "SMS_EPI_iso2p2_TR2_RUN(\\d+)": "task-main_run-{run}_bold"
   }
 }
