@@ -69,6 +69,8 @@ Run a single-subject conversion before processing the full dataset.
 python dicom_to_bids.py --mapping_file my_study_mapping.json run \
   --zip_dir /path/to/dicom_zips \
   --output_dir /path/to/bids_dataset \
+  --work_dir /scratch/$USER/dicom_to_bids \
+  --dataset_name MyStudy \
   --subjects 1 \
   --zero_padding 3 \
   --misc_dir /path/to/misc_nifti \
@@ -93,11 +95,23 @@ Review the output and the `misc_dir` contents before running all subjects.
 python dicom_to_bids.py --mapping_file my_study_mapping.json run \
   --zip_dir /path/to/dicom_zips \
   --output_dir /path/to/bids_dataset \
+  --work_dir /scratch/$USER/dicom_to_bids \
+  --dataset_name MyStudy \
   --subjects all \
   --zero_padding 3 \
   --misc_dir /path/to/misc_nifti \
   --workers 4
 ```
+
+`--work_dir` holds extracted DICOMs and intermediate dcm2niix outputs and is
+deleted after the command finishes or fails. On a cluster, point it to
+`$SLURM_TMPDIR` inside a compute job when possible, or to a study-specific
+directory under `/scratch/$USER`. Do not place large temporary extraction trees
+in quota-limited project storage.
+
+The converter creates the required `dataset_description.json` in the BIDS root.
+Use `--dataset_name` to give the dataset a meaningful name. If the file already
+exists, the converter validates and preserves it rather than overwriting it.
 
 ### 5. Link fieldmaps if they should be used
 
@@ -281,6 +295,7 @@ If scanner exports use a different layout, use the two-step workflow and inspect
 python dicom_to_bids.py --mapping_file my_study_mapping.json run \
   --zip_dir /path/to/dicom_zips \
   --output_dir /path/to/bids_dataset \
+  --work_dir /scratch/$USER/dicom_to_bids \
   --subjects all \
   --zero_padding 3 \
   --misc_dir /path/to/misc_nifti \

@@ -7,10 +7,45 @@ from pathlib import Path
 import fire
 import subprocess
 import requests
+import tempfile
 from unzip_dicoms import unzip_and_rename, parse_subjects
 from typing import Optional
 import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
+
+
+DEFAULT_BIDS_VERSION = "1.10.0"
+
+
+def _ensure_dataset_description(
+    output_dir: Path,
+    dataset_name: Optional[str] = None,
+    bids_version: str = DEFAULT_BIDS_VERSION,
+) -> Path:
+    """Create the required BIDS dataset description without overwriting one."""
+    description_path = output_dir / "dataset_description.json"
+    if description_path.exists():
+        try:
+            with description_path.open("r", encoding="utf-8") as file_handle:
+                json.load(file_handle)
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError(
+                f"Existing dataset description is not valid JSON: {description_path}"
+            ) from error
+        print(f"Using existing BIDS dataset description: {description_path}")
+        return description_path
+
+    description = {
+        "Name": dataset_name or output_dir.name,
+        "BIDSVersion": bids_version,
+        "DatasetType": "raw",
+    }
+    with description_path.open("w", encoding="utf-8") as file_handle:
+        json.dump(description, file_handle, indent=2)
+        file_handle.write("\n")
+
+    print(f"Created BIDS dataset description: {description_path}")
+    return description_path
 
 
 def _process_single_subject(
@@ -176,8 +211,11 @@ class DicomToBidsConverter:
         input_dir: Optional[str] = None,
         zip_dir: Optional[str] = None,
         misc_dir: Optional[str] = None,
+        work_dir: Optional[str] = None,
         zero_padding: int = 2,
         workers: int = 4,
+        dataset_name: Optional[str] = None,
+        bids_version: str = DEFAULT_BIDS_VERSION,
     ):
         """
         Runs the DICOM to BIDS conversion.
@@ -188,8 +226,15 @@ class DicomToBidsConverter:
             input_dir (str, optional): Path to a directory with pre-unzipped subject folders (e.g., sub-001).
             zip_dir (str, optional): Path to a directory with zipped subject archives.
             misc_dir (str, optional): A separate directory to store non-BIDS compliant files.
+            work_dir (str, optional): Parent directory for temporary DICOM extraction and
+                                      dcm2niix outputs. Use node-local or scratch storage
+                                      for large ZIP datasets. Defaults to output_dir.
             zero_padding (int, optional): The number of leading zeros for the subject ID. Defaults to 2.
             workers (int, optional): Number of parallel workers for conversion. Defaults to 4.
+            dataset_name (str, optional): Name written to dataset_description.json.
+                                         Defaults to the output directory name.
+            bids_version (str, optional): BIDS version written to
+                                          dataset_description.json.
         """
         if not input_dir and not zip_dir:
             print("Error: You must provide either --input-dir or --zip-dir.")
@@ -199,8 +244,18 @@ class DicomToBidsConverter:
             sys.exit(1)
 
         self.output_dir = Path(output_dir).resolve()
-        self.temp_dir = self.output_dir / "tmp"
         self.misc_dir = Path(misc_dir) if misc_dir else None
+
+        session_work_dir = None
+        if work_dir:
+            work_parent = Path(work_dir).expanduser().resolve()
+            work_parent.mkdir(parents=True, exist_ok=True)
+            session_work_dir = Path(
+                tempfile.mkdtemp(prefix="dicom_to_bids_", dir=work_parent)
+            )
+            self.temp_dir = session_work_dir / "converted_nifti"
+        else:
+            self.temp_dir = self.output_dir / "tmp"
 
         # Create a unique, timestamped log file in a 'logs' directory
         log_dir = Path("./logs")
@@ -209,12 +264,21 @@ class DicomToBidsConverter:
         self.error_log_file = log_dir / f"conversion_{timestamp}.log"
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        _ensure_dataset_description(
+            self.output_dir,
+            dataset_name=dataset_name,
+            bids_version=bids_version,
+        )
 
         raw_dicom_dir = None
         try:
             if zip_dir:
                 # Create a temporary directory to hold the unzipped raw DICOMs
-                raw_dicom_dir = self.output_dir / "tmp_dicom"
+                raw_dicom_dir = (
+                    session_work_dir / "raw_dicom"
+                    if session_work_dir
+                    else self.output_dir / "tmp_dicom"
+                )
                 print(f"Unzipping archives from {zip_dir} to temporary directory {raw_dicom_dir}...")
                 unzip_and_rename(zip_dir, str(raw_dicom_dir), subjects=subjects, zero_padding=zero_padding)
                 self.input_dir = raw_dicom_dir
@@ -275,6 +339,9 @@ class DicomToBidsConverter:
             if raw_dicom_dir and raw_dicom_dir.exists():
                 print(f"Cleaning up temporary raw DICOM directory {raw_dicom_dir}...")
                 shutil.rmtree(raw_dicom_dir)
+
+            if session_work_dir and session_work_dir.exists():
+                shutil.rmtree(session_work_dir)
 
 
 if __name__ == "__main__":
