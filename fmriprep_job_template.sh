@@ -46,17 +46,18 @@ mkdir -p "${SLURM_TMPDIR}/bids_input" "${SLURM_TMPDIR}/output" "${SLURM_TMPDIR}/
 
 cp -r "${subject_dir}" "${SLURM_TMPDIR}/bids_input/"
 cp "${bids_root}/dataset_description.json" "${SLURM_TMPDIR}/bids_input/"
-cp "${license_file}" "${SLURM_TMPDIR}/bids_input/license.txt"
 
+# Keep the license outside /data so it is not treated as part of the BIDS dataset.
 apptainer run --cleanenv \
   -B "${SLURM_TMPDIR}/bids_input:/data" \
   -B "${SLURM_TMPDIR}/output:/output" \
   -B "${SLURM_TMPDIR}/work_dir:/work" \
+  -B "${license_file}:/license.txt:ro" \
   "${fmriprep_sif}" \
   /data /output participant \
   --participant-label "${sub_id}" \
   --work-dir /work \
-  --fs-license-file /data/license.txt \
+  --fs-license-file /license.txt \
   --output-spaces T1w MNI152NLin2009cAsym \
   --nthreads "${SLURM_CPUS_PER_TASK}" \
   --omp-nthreads "${SLURM_CPUS_PER_TASK}" \
