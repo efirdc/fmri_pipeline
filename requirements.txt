@@ -2,3 +2,6 @@ numpy
 pandas
 fire
 requests
+nibabel
+matplotlib>=3.8.0
+Pillow

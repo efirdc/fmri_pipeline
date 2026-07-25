@@ -146,6 +146,38 @@ See [Obtaining fMRIPrep and FreeSurfer files on DRAC](#obtaining-fmriprep-and-fr
 
 For a new dataset, run a small test first before submitting a large subject array.
 
+### 7. Check registration quality
+
+After fMRIPrep finishes, build a manifest of each BOLD-reference-to-T1w
+registration and generate quantitative summaries plus animated image overlays:
+
+```bash
+python registration_qc_manifest.py \
+  --fmriprep-root /path/to/fmriprep \
+  --out-csv /path/to/registration_qc/manifest.csv \
+  --segmentation-source ribbon_or_dseg
+
+python registration_qc.py \
+  --manifest-csv /path/to/registration_qc/manifest.csv \
+  --out-dir /path/to/registration_qc/outputs \
+  --slices 7 \
+  --crop-margin-px 12
+```
+
+Review `overview_heatmap.png` and every animation under
+`qualitative/apng/` before beginning statistical analysis. See the
+[registration QC guide](docs/registration_qc.md) for the manifest schema,
+metrics, and output details.
+
+On DRAC, copy and edit the included SLURM template instead of running the full
+rendering job on a login node:
+
+```bash
+cp fmri_pipeline/registration_qc_job_template.sh run_registration_qc.sh
+mkdir -p logs
+sbatch run_registration_qc.sh
+```
+
 ## Requirements
 
 ### DICOM to BIDS conversion
